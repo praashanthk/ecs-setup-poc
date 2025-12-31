@@ -2,20 +2,18 @@ terraform {
   backend "s3" {}
 }
 
-
-
-
 provider "aws" {
   region = "ap-south-1"
 }
 
-# ################ vpc
-
-
-
+# ---------------- VPC ----------------
 
 resource "aws_vpc" "this" {
   cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.this.id
 }
 
 resource "aws_subnet" "public" {
@@ -24,8 +22,50 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
-### iam part-------
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.this.id
 
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+
+# ---------------- Security Group ----------------
+
+resource "aws_security_group" "ecs" {
+  name   = "ecs-sg"
+  vpc_id = aws_vpc.this.id
+
+  # ✅ ALLOW inbound HTTP
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+ ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # ✅ ALLOW all outbound
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+# ---------------- IAM ----------------
 
 resource "aws_iam_role" "ecs_role" {
   name = "ecsTaskExecutionRole"
@@ -33,9 +73,9 @@ resource "aws_iam_role" "ecs_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ecs-tasks.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -45,25 +85,30 @@ resource "aws_iam_role_policy_attachment" "ecs_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ecs part --------------------------
-
+# ---------------- ECS ----------------
 
 resource "aws_ecs_cluster" "this" {
   name = "simple-cluster"
+}
+
+resource "aws_ecr_repository" "flask" {
+  name = "flask-ecs-poc"
 }
 
 resource "aws_ecs_task_definition" "task" {
   family                   = "simple-task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu    = "256"
-  memory = "512"
-  execution_role_arn = aws_iam_role.ecs_role.arn
+  cpu                      = "256"
+  memory                   = "512"
+  execution_role_arn       = aws_iam_role.ecs_role.arn
 
   container_definitions = jsonencode([{
     name  = "app"
-    image = "public.ecr.aws/nginx/nginx:latest"
-    portMappings = [{ containerPort = 80 }]
+    image = "990607210925.dkr.ecr.ap-south-1.amazonaws.com/flask-ecs-poc:latest"
+    portMappings = [{
+      containerPort = 80
+    }]
   }])
 }
 
@@ -75,7 +120,8 @@ resource "aws_ecs_service" "service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [aws_subnet.public.id]
+    subnets         = [aws_subnet.public.id]
+    security_groups = [aws_security_group.ecs.id]
     assign_public_ip = true
   }
 }

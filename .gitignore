@@ -1,0 +1,17 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Terragrunt
+.terragrunt-cache/
+
+# Logs
+*.log
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
