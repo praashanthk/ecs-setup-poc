@@ -9,7 +9,11 @@ provider "aws" {
   region = "ap-south-1"
 }
 
-# ---------- VPC ----------
+# ################ vpc
+
+
+
+
 resource "aws_vpc" "this" {
   cidr_block = "10.0.0.0/16"
 }
@@ -20,7 +24,9 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 }
 
-# ---------- IAM ----------
+### iam part-------
+
+
 resource "aws_iam_role" "ecs_role" {
   name = "ecsTaskExecutionRole"
 
@@ -39,7 +45,9 @@ resource "aws_iam_role_policy_attachment" "ecs_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# ---------- ECS ----------
+# ecs part --------------------------
+
+
 resource "aws_ecs_cluster" "this" {
   name = "simple-cluster"
 }
